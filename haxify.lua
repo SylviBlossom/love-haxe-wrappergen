@@ -2,6 +2,9 @@
 
 api = require "love-api.love_api"
 
+-- Add some undocumented Love functions
+require("love-api-extender.love")(api)
+
 do
 	-- Map types to their modules, so we can properly do imports
 	local lovetypes = {}
