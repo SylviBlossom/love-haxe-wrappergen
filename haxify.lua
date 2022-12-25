@@ -327,8 +327,14 @@ end
 
 mergeTables(files, emitModule(api, "love"))
 
+local windows = package.config:sub(1, 1) == "\\"
+
 for i, v in pairs(files) do
-	os.execute("mkdir -p " .. dirname(i))
+	if windows then
+		os.execute("mkdir \"" .. dirname(i):gsub("/", "\\") .. "\"")
+	else
+		os.execute("mkdir -p \"" .. dirname(i).."\"")
+	end
 	local f = io.open(i, "w")
 	f:write(v)
 	f:close()
