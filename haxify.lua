@@ -284,6 +284,13 @@ function emitCallback(c, types)
 	return ("\tpublic static var %s : %s;"):format(c.name, type)
 end
 
+function emitVariable(var, types)
+	local type = typeMap(var.type)
+	types[type] = true
+
+	return ("\tpublic static var %s : %s;"):format(var.name, type)
+end
+
 function rawEmitFunction(typeName, f, types, static, multirets)
 	local out = {""}
 
@@ -380,6 +387,11 @@ function emitModule(m, luaName)
 
 	for i, v in ipairs(m.callbacks or {}) do
 		table.insert(out, emitCallback(v, types))
+	end
+
+	-- Not official love-api structure, only used for undocumented features
+	for i, v in ipairs(m.variables or {}) do
+		table.insert(out, emitVariable(v, types))
 	end
 
 	table.insert(out, "}")
