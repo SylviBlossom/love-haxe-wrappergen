@@ -109,6 +109,7 @@ do
 		table = "Table<Dynamic,Dynamic>",
 		["light userdata"] = "UserData",
 		userdata = "UserData",
+		cdata = "UserData",
 		["function"] = "Dynamic", -- FIXME
 		mixed = "Dynamic",
 		value = "Dynamic",
@@ -122,6 +123,9 @@ do
 	}
 	
 	function typeMap(t)
+		if t:find(" or ") then
+			return "Dynamic" -- FIXME: "x or y" types
+		end
 		return map[t] or t
 	end
 end
@@ -140,6 +144,28 @@ end
 
 function dirname(path)
 	return path:match("^(.-)/?[^/]+$")
+end
+
+function split(str, sep, remove_empty)
+    local t = {}
+    local i = 1
+    local s = ""
+    while i <= #str do
+        if string.sub(str, i, i + (#sep - 1)) == sep then
+            if not remove_empty or s ~= "" then
+                table.insert(t, s)
+            end
+            s = ""
+            i = i + (#sep - 1)
+        else
+            s = s .. string.sub(str, i, i)
+        end
+        i = i + 1
+    end
+    if not remove_empty or s ~= "" then
+        table.insert(t, s)
+    end
+    return t
 end
 
 function emitMultiReturnType(name, returns, types)
@@ -165,22 +191,67 @@ function emitOverload(typeName, name, o, types, multirets)
 		v.type = typeMap(v.type)
 		types[v.type] = true
 
-		v.name = v.name:match("^\"(.*)\"$") or v.name -- FIXME: workaround for love.event.quit
+		v.name = v.name:match("^'(.*)'$") or v.name -- FIXME: workaround for love.event.quit
 
 		if v.name == "..." then
-			table.insert(args, ("args:Rest<%s>"):format(v.type))
+			if v.description == "Additional matrix elements." then
+				-- Very special workaround for the "..." in Transform:setMatrix arguments
+				for i = 1, 4 do
+					for j = 1, 4 do
+						if not ((i == 1 and j == 1) or (i == 1 and j == 2) or (i == 4 and j == 4)) then
+							table.insert(args, ("e%d_%d:Float"):format(i, j))
+						end
+					end
+				end
+			else
+				table.insert(args, ("args:Rest<%s>"):format(v.type))
+			end
 		else
-			local arg = (v.default and "?" or "") .. v.name .. ":" .. v.type
-			table.insert(args, arg)
+			-- FIXME: love.audio.setOrientation takes multiple values in one ("fx, fy, fz")
+			local names = split(v.name, ", ")
+			for _, argName in ipairs(names) do
+				local default = v.default
+				if not default and v.table and #v.table > 0 then
+					-- Count table as optional if all of its values are optional
+					default = true
+					for _, tableValue in ipairs(v.table) do
+						if not tableValue.default then
+							default = false
+							break
+						end
+					end
+				end
+				local arg = (default and "?" or "") .. argName .. ":" .. v.type
+				table.insert(args, arg)
+			end
+		end
+	end
+	local returns = {}
+	for i, v in ipairs(o.returns or {}) do
+		if v.name == "..." and v.description == "Additional matrix elements." then
+			-- Very special workaround for the "..." in Transform:getMatrix return values
+			for i = 1, 4 do
+				for j = 1, 4 do
+					if not ((i == 1 and j == 1) or (i == 1 and j == 2) or (i == 4 and j == 4)) then
+						table.insert(returns, {name = ("e%d_%d"):format(i, j), type = "number"})
+					end
+				end
+			end
+		else
+			-- FIXME: love.audio.getOrientation returns multiple values in one ("fx, fy, fz")
+			local names = split(v.name, ", ")
+			for _, retName in ipairs(names) do
+				table.insert(returns, {name = retName, type = v.type})
+			end
 		end
 	end
 	local retType = "Void"
-	if o.returns and #o.returns > 1 then
+	if #returns > 1 then
 		-- In case of multiple returns we need to generate a new return type
 		retType = typeName .. capitalize(name) .. "Result"
-		multirets[name] = emitMultiReturnType(retType, o.returns, types)
-	elseif o.returns then
-		retType = typeMap(o.returns[1].type)
+		multirets[name] = emitMultiReturnType(retType, returns, types)
+	elseif #returns == 1 then
+		retType = typeMap(returns[1].type)
 		types[retType] = true
 	end
 	return ("(%s) : %s"):format(table.concat(args, ", "), retType)
@@ -241,7 +312,11 @@ function emitEnum(e, packageName)
 	table.insert(out, ("abstract %s (String)\n{"):format(e.name))
 
 	for i, v in ipairs(e.constants) do
-		table.insert(out, ("\tvar %s = \"%s\";"):format(capitalize(v.name), v.name))
+		local varName = capitalize(v.name)
+		if tonumber(varName:sub(1, 1)) then
+			varName = "_"..varName -- prepend underscore if the constant starts with a number
+		end
+		table.insert(out, ("\tvar %s = \"%s\";"):format(varName, v.name))
 	end
 
 	table.insert(out, "}")
@@ -265,8 +340,12 @@ function emitType(t, packageName)
 	local superType = t.supertypes and mostSpecificSupertype(t.supertypes) or "UserData"
 	table.insert(out, ("extern class %s extends %s\n{"):format(t.name, superType))
 
+	local emittedMethods = {}
 	for i, v in ipairs(t.functions or {}) do
-		table.insert(out, emitMethod(t.name, v, types, multirets))
+		if not emittedMethods[v.name] then -- FIXME: workaround because Mesh:attachAttribute is documented twice 
+			table.insert(out, emitMethod(t.name, v, types, multirets))
+			emittedMethods[v.name] = true
+		end
 	end
 
 	table.insert(out, "}")
