@@ -118,11 +118,6 @@ do
 		value = "Dynamic",
 		any = "Dynamic",
 		Variant = "Dynamic",
-
-		-- FIXME
-		["ShaderVariableType"] = "String",
-		["KeyConstant"] = "String",
-		["Scancode"] = "String",
 	}
 	
 	function typeMap(t)
