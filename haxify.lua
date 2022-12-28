@@ -315,6 +315,47 @@ function emitMethod(typeName, m, types, multirets)
 	return rawEmitFunction(typeName, m, types, false, multirets)
 end
 
+local enumNameSanitizer = {
+	["+"] = "plus",
+	["-"] = "minus",
+	["="] = "equals",
+	["."] = "dot",
+	["/"] = "slash",
+	["\\"] = "backslash",
+	["*"] = "asterisk",
+	["!"] = "exclamation",
+	["?"] = "question",
+	["<"] = "less",
+	[">"] = "greater",
+	["&"] = "ampersand",
+	["|"] = "pipe",
+	["%"] = "percent",
+	["$"] = "dollar",
+	["#"] = "hash",
+	["@"] = "at",
+	["^"] = "caret",
+	["~"] = "tilde",
+	["`"] = "backtick",
+	["("] = "parenleft",
+	[")"] = "parenright",
+	["["] = "bracketleft",
+	["]"] = "bracketright",
+	["{"] = "braceleft",
+	["}"] = "braceright",
+	[","] = "comma",
+	[";"] = "semicolon",
+	[":"] = "colon",
+	["'"] = "apostrophe",
+	["\""] = "quote",
+	[" "] = "space",
+	["_"] = "underscore",
+}
+
+local enumValueSanitizer = {
+	["\\"] = "\\\\",
+	["\""] = "\\\"",
+}
+
 function emitEnum(e, packageName)
 	local out = {}
 	table.insert(out, ("package %s;"):format(packageName))
@@ -322,11 +363,11 @@ function emitEnum(e, packageName)
 	table.insert(out, ("abstract %s (String)\n{"):format(e.name))
 
 	for i, v in ipairs(e.constants) do
-		local varName = capitalize(v.name)
+		local varName = capitalize(v.name:gsub(".", enumNameSanitizer))
 		if tonumber(varName:sub(1, 1)) then
 			varName = "_"..varName -- prepend underscore if the constant starts with a number
 		end
-		table.insert(out, ("\tvar %s = \"%s\";"):format(varName, v.name))
+		table.insert(out, ("\tvar %s = \"%s\";"):format(varName, v.name:gsub(".", enumValueSanitizer)))
 	end
 
 	table.insert(out, "}")
